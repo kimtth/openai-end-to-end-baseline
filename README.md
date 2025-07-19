@@ -1,3 +1,16 @@
+
+# Note for reference
+
+- [Azure API Management Landing Zone Accelerator](https://github.com/Azure/apim-landing-zone-accelerator): Azure API Management with Application Gateway - Secure Baseline
+- [Azure Application Gateway and API Management](https://github.com/msalemor/azure-appgw-apim): Powershell script
+- [Open SSL](https://docs.openssl.org/3.5/man7/ossl-guide-introduction/#getting-and-installing-openssl): To create a certicates for Application Gateway (Non-Production only)
+- [Azure Private Link](https://learn.microsoft.com/en-us/azure/private-link/private-link-overview)
+- [Azure Monitor Private Link Scope (AMPLS) and Application Insights](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/private-link-security)
+- [Azure service tags](https://learn.microsoft.com/en-us/azure/virtual-network/service-tags-overview): Azure service tags overview for user-defined routes
+- [Use Azure Firewall to route a multi hub and spoke topology](https://learn.microsoft.com/en-us/azure/firewall/firewall-multi-hub-spoke#routing-on-the-spoke-subnets)
+
+-----
+
 # Azure AI Foundry Agent service chat baseline reference implementation
 
 This reference implementation illustrates an approach running a chat application and an AI orchestration layer in a single region. It uses Azure AI Foundry Agent service as the orchestrator and OpenAI foundation models. This repository directly supports the [Baseline end-to-end chat reference architecture](https://learn.microsoft.com/azure/architecture/ai-ml/architecture/baseline-openai-e2e-chat) on Microsoft Learn.
