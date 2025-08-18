@@ -21,11 +21,6 @@ param agentSubnetResourceId string
 @minLength(1)
 param privateEndpointSubnetResourceId string
 
-@description('Your principal ID. Allows you to access the Azure AI Foundry portal for post-deployment verification of functionality.')
-@maxLength(36)
-@minLength(36)
-param aiFoundryPortalUserPrincipalId string
-
 var aiFoundryName = 'aif${baseName}'
 
 // ---- Existing resources ----
@@ -43,12 +38,6 @@ resource aiFoundryLinkedPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-0
 @description('Existing: Private DNS zone for Azure AI services using the Azure AI OpenAI FQDN.')
 resource azureOpenAiLinkedPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' existing = {
   name: 'privatelink.openai.azure.com'
-}
-
-@description('Existing: Built-in Cognitive Services User role.')
-resource cognitiveServicesUserRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
-  name: 'a97b65f3-24c7-4388-baec-2e87135dc908'
-  scope: subscription()
 }
 
 @description('Existing: Log sink for Azure Diagnostics.')
@@ -72,7 +61,7 @@ resource aiFoundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
   properties: {
     customSubDomainName: aiFoundryName
     allowProjectManagement: true // Azure AI Foundry account
-    disableLocalAuth: true
+    disableLocalAuth: false // Enable local authentication for development
     networkAcls: {
       bypass: 'None'
       ipRules: []
@@ -84,7 +73,7 @@ resource aiFoundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
     networkInjections: [
       {
         scenario: 'agent'
-        subnetArmId: agentSubnetResourceId  // Report this, schema issue and IP address range issue
+        subnetArmId: agentSubnetResourceId // Report this, schema issue and IP address range issue
         useMicrosoftManagedNetwork: false
       }
     ]
@@ -101,24 +90,11 @@ resource aiFoundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
       model: {
         format: 'OpenAI'
         name: 'gpt-4o'
-        version: '2024-11-20'  // Use a model version available in your region.
+        version: '2024-11-20' // Use a model version available in your region.
       }
       versionUpgradeOption: 'NoAutoUpgrade' // Production deployments should not auto-upgrade models.  Testing compatibility is important.
-      raiPolicyName: 'Microsoft.DefaultV2'  // If this isn't strict enough for your use case, create a custom RAI policy.
+      raiPolicyName: 'Microsoft.DefaultV2' // If this isn't strict enough for your use case, create a custom RAI policy.
     }
-  }
-}
-
-// Role assignments
-
-@description('Assign yourself to have access to the Azure AI Foundry portal.')
-resource cognitiveServicesUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(aiFoundry.id, cognitiveServicesUserRole.id, aiFoundryPortalUserPrincipalId)
-  scope: aiFoundry
-  properties: {
-    roleDefinitionId: cognitiveServicesUserRole.id
-    principalId: aiFoundryPortalUserPrincipalId
-    principalType: 'User'
   }
 }
 

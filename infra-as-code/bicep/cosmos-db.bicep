@@ -13,11 +13,6 @@ param baseName string
 @minLength(4)
 param logAnalyticsWorkspaceName string
 
-@description('Assign your user some roles to support access to the Azure AI Foundry Agent dependencies for troubleshooting post deployment')
-@maxLength(36)
-@minLength(36)
-param debugUserPrincipalId string
-
 @description('The resource ID for the subnet that private endpoints in the workload should surface in.')
 @minLength(1)
 param privateEndpointSubnetResourceId string
@@ -29,6 +24,7 @@ resource cosmosDbLinkedPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06
 }
 
 // Cosmos DB Account Reader Role
+#disable-next-line no-unused-existing-resources // Kept for optional debug role assignment wiring
 resource cosmosDbAccountReaderRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
   name: 'fbdf93bf-df7d-467e-a4d2-9458aa1360c8'
   scope: subscription()
@@ -49,7 +45,7 @@ resource cosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2024-12-01-previ
     consistencyPolicy: {
       defaultConsistencyLevel: 'Session'
     }
-    disableLocalAuth: true
+    disableLocalAuth: false // Enable local authentication for development
     enableAutomaticFailover: false
     enableMultipleWriteLocations: false
     minimalTlsVersion: 'Tls12'
@@ -74,7 +70,7 @@ resource cosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2024-12-01-previ
     backupPolicy: {
       type: 'Continuous'
       continuousModeProperties: {
-        tier: 'Continuous7Days'   // You have seven days of continuous backup to address point-in-time restore needs.
+        tier: 'Continuous7Days' // You have seven days of continuous backup to address point-in-time restore needs.
       }
     }
   }
@@ -82,19 +78,6 @@ resource cosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2024-12-01-previ
   @description('Built-in Cosmos DB Data Contributor role that can be assigned to Entra identities to grant data access on a Cosmos DB database.')
   resource dataContributorRole 'sqlRoleDefinitions' existing = {
     name: '00000000-0000-0000-0000-000000000002'
-  }
-
-  @description('Assign your own user to access the enterprise_memory database contents for troubleshooting purposes. Not required for normal usage.')
-  resource userToCosmos 'sqlRoleAssignments' = {
-    name: guid(debugUserPrincipalId, dataContributorRole.id, cosmosDbAccount.id)
-    properties: {
-      roleDefinitionId: cosmosDbAccount::dataContributorRole.id
-      principalId: debugUserPrincipalId
-      scope: cosmosDbAccount.id
-    }
-    dependsOn: [
-      assignDebugUserToCosmosAccountReader
-    ]
   }
 }
 
@@ -184,19 +167,6 @@ resource cosmosDbPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01'
         }
       ]
     }
-  }
-}
-
-
-// Role assignments
-
-resource assignDebugUserToCosmosAccountReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(debugUserPrincipalId, cosmosDbAccountReaderRole.id, cosmosDbAccount.id)
-  scope: cosmosDbAccount
-  properties: {
-    roleDefinitionId: cosmosDbAccountReaderRole.id
-    principalId: debugUserPrincipalId
-    principalType: 'User'
   }
 }
 

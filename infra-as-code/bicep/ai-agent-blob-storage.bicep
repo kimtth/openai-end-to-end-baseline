@@ -9,11 +9,6 @@ param location string = resourceGroup().location
 @maxLength(8)
 param baseName string
 
-@description('Assign your user some roles to support access to the Azure AI Foundry Agent dependencies for troubleshooting post deployment')
-@maxLength(36)
-@minLength(36)
-param debugUserPrincipalId string
-
 @description('The name of the workload\'s existing Log Analytics workspace.')
 @minLength(4)
 param logAnalyticsWorkspaceName string
@@ -23,11 +18,6 @@ param logAnalyticsWorkspaceName string
 param privateEndpointSubnetResourceId string
 
 // ---- Existing resources ----
-
-resource storageBlobDataOwnerRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
-  name: 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
-  scope: subscription()
-}
 
 resource blobStorageLinkedPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' existing = {
   name: 'privatelink.blob.${environment().suffixes.storage}'
@@ -43,7 +33,7 @@ resource agentStorageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
   name: 'stagent${baseName}'
   location: location
   sku: {
-    name: 'Standard_GZRS'  // This SKU has limited regional availability https://github.com/MicrosoftDocs/azure-docs/blob/main/includes/storage-redundancy-standard-gzrs.md, if you would like to deploy this implementation to a region outside this list, you'll need to choose a storage SKU that is supported but still meets your workload's non-functional requirements.
+    name: 'Standard_GZRS' // This SKU has limited regional availability https://github.com/MicrosoftDocs/azure-docs/blob/main/includes/storage-redundancy-standard-gzrs.md, if you would like to deploy this implementation to a region outside this list, you'll need to choose a storage SKU that is supported but still meets your workload's non-functional requirements.
   }
   kind: 'StorageV2'
   properties: {
@@ -83,19 +73,6 @@ resource agentStorageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
     name: 'default'
   }
 }
-
-// Role assignments
-
-resource debugUserBlobDataOwnerAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(debugUserPrincipalId, storageBlobDataOwnerRole.id, agentStorageAccount.id)
-  scope: agentStorageAccount
-  properties: {
-    principalId: debugUserPrincipalId
-    roleDefinitionId: storageBlobDataOwnerRole.id
-    principalType: 'User'
-  }
-}
-
 
 // Private endpoints
 
