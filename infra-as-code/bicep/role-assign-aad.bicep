@@ -32,6 +32,14 @@ param cosmosSqlRoleAssignmentScope string = ''
 @maxLength(36)
 param functionAppManagedIdentityPrincipalId string
 
+@description('The name of the Key Vault used by Application Gateway for its certificate.')
+param keyVaultName string
+
+@description('The principal ID (GUID) of the App Gateway user-assigned managed identity.')
+@minLength(36)
+@maxLength(36)
+param appGatewayManagedIdentityPrincipalId string
+
 // Built-in roles (existing)
 resource storageBlobDataOwnerRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
   // Storage Blob Data Owner
@@ -99,6 +107,12 @@ resource azureAiUserRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' ex
   scope: subscription()
 }
 
+resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+  // Key Vault Secrets User
+  name: '4633458b-17de-408a-b874-0445c86b69e6'
+  scope: subscription()
+}
+
 // Existing resources (by naming convention from the base templates)
 resource agentStorageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
   // stagent${baseName}
@@ -139,6 +153,10 @@ resource cosmosDataContributorRole 'Microsoft.DocumentDB/databaseAccounts/sqlRol
   // Built-in Cosmos DB Data Contributor
   name: '00000000-0000-0000-0000-000000000002'
   parent: cosmosDbAccount
+}
+
+resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
+  name: keyVaultName
 }
 
 // Role assignments from failed deployments:
@@ -310,5 +328,16 @@ resource funcAzureAiUserRoleAssignment 'Microsoft.Authorization/roleAssignments@
     roleDefinitionId: azureAiUserRole.id
     principalType: 'ServicePrincipal'
     principalId: functionAppManagedIdentityPrincipalId
+  }
+}
+
+// Grant App Gateway MI access to Key Vault secrets (moved from application-gateway.bicep)
+resource appGatewayKeyVaultSecretsUserAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, appGatewayManagedIdentityPrincipalId, keyVaultSecretsUserRole.id)
+  scope: keyVault
+  properties: {
+    roleDefinitionId: keyVaultSecretsUserRole.id
+    principalId: appGatewayManagedIdentityPrincipalId
+    principalType: 'ServicePrincipal'
   }
 }

@@ -70,28 +70,12 @@ resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
   }
 }
 
-@description('Built-in Role: [Key Vault Secrets User](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#key-vault-secrets-user)')
-resource keyVaultSecretsUserRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
-  name: '4633458b-17de-408a-b874-0445c86b69e6'
-  scope: subscription()
-}
-
 // ---- New resources ----
 
 // Managed Identity for App Gateway.
 resource appGatewayManagedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
   name: appGatewayManagedIdentityName
   location: location
-}
-
-@description('Grant the Application Gateway managed identity Key Vault secrets user role permissions. This allows pulling certificates.')
-module grantAppGatewaySecretsUserRoleAssignment './modules/keyvaultRoleAssignment.bicep' = {
-  name: 'appGatewaySecretsUserRoleAssignmentDeploy'
-  params: {
-    roleDefinitionId: keyVaultSecretsUserRole.id
-    principalId: appGatewayManagedIdentity.properties.principalId
-    keyVaultName: keyVaultName
-  }
 }
 
 //External IP for App Gateway
@@ -302,9 +286,6 @@ resource appGateway 'Microsoft.Network/applicationGateways@2024-05-01' = {
       maxCapacity: 5
     }
   }
-  dependsOn: [
-    grantAppGatewaySecretsUserRoleAssignment
-  ]
 }
 
 @description('Enable Application Gateway diagnostic settings')

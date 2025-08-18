@@ -247,6 +247,11 @@ resource functionAppUserAssignedIdentity 'Microsoft.ManagedIdentity/userAssigned
   name: 'id-func-${baseName}'
 }
 
+// Existing reference to the App Gateway managed identity created in application-gateway.bicep
+resource appGatewayUserAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = {
+  name: 'id-agw-${baseName}'
+}
+
 // Call role-assign-aad.bicep to grant roles to users, AI Foundry project, and the Function App identity
 module roleAssignments 'role-assign-aad.bicep' = if (enableRoleAssignments) {
   name: 'roleAssignmentsDeploy'
@@ -259,9 +264,12 @@ module roleAssignments 'role-assign-aad.bicep' = if (enableRoleAssignments) {
     aiFoundryProjectId: deployAzureAiFoundryProject.outputs.aiFoundryProjectId
     workspaceIdAsGuid: deployAzureAiFoundryProject.outputs.workspaceIdAsGuid
     functionAppManagedIdentityPrincipalId: functionAppUserAssignedIdentity.properties.principalId
+    keyVaultName: deployKeyVault.outputs.keyVaultName
+    appGatewayManagedIdentityPrincipalId: appGatewayUserAssignedIdentity.properties.principalId
   }
   dependsOn: [
     deployWebApp
+    deployApplicationGateway
   ]
 }
 
