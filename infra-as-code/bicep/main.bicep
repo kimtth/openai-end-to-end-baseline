@@ -11,16 +11,12 @@ param baseName string
 
 @description('Domain name to use for App Gateway')
 @minLength(3)
-param customDomainName string = 'contoso.com'
+param customDomainName string = 'cloudapp.azure.com'
 
 @description('The certificate data for app gateway TLS termination. The value is base64 encoded.')
 @secure()
 @minLength(1)
 param appGatewayListenerCertificate string
-
-@description('The name of the web deploy file. The file should reside in a deploy container in the Azure Storage account. Defaults to chatui.zip')
-@minLength(5)
-param publishFileName string = 'chatui.zip'
 
 @description('Specifies the password of the administrator account on the Windows jump box.\n\nComplexity requirements: 3 out of 4 conditions below need to be fulfilled:\n- Has lower characters\n- Has upper characters\n- Has a digit\n- Has a special character\n\nDisallowed values: "abc@123", "P@$$w0rd", "P@ssw0rd", "P@ssword123", "Pa$$word", "pass@word1", "Password!", "Password1", "Password22", "iloveyou!"')
 @secure()
@@ -38,6 +34,9 @@ param telemetryOptOut bool = false
 
 // Customer Usage Attribution Id
 var varCuaid = 'a52aa8a8-44a8-46e9-b7a5-189ab3a64409'
+
+// Toggle to activate role assignment module
+var enableRoleAssignments = false
 
 // ---- New resources ----
 
@@ -104,7 +103,7 @@ module deployJumpBox 'jump-box.bicep' = {
     jumpBoxAdminPassword: jumpBoxAdminPassword
   }
   dependsOn: [
-    deployAzureFirewall  // Makes sure that egress traffic is controlled before workload resources start being deployed
+    deployAzureFirewall // Makes sure that egress traffic is controlled before workload resources start being deployed
   ]
 }
 
@@ -120,10 +119,9 @@ module deployAzureAIFoundry 'ai-foundry.bicep' = {
     logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
     agentSubnetResourceId: deployVirtualNetwork.outputs.agentsEgressSubnetResourceId
     privateEndpointSubnetResourceId: deployVirtualNetwork.outputs.privateEndpointsSubnetResourceId
-    aiFoundryPortalUserPrincipalId: yourPrincipalId
   }
   dependsOn: [
-    deployAzureFirewall  // Makes sure that egress traffic is controlled before workload resources start being deployed
+    deployAzureFirewall // Makes sure that egress traffic is controlled before workload resources start being deployed
   ]
 }
 
@@ -135,7 +133,6 @@ module deployAIAgentServiceDependencies 'ai-agent-service-dependencies.bicep' = 
     location: location
     baseName: baseName
     logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
-    debugUserPrincipalId: yourPrincipalId
     privateEndpointSubnetResourceId: deployVirtualNetwork.outputs.privateEndpointsSubnetResourceId
   }
 }
@@ -179,7 +176,6 @@ module deployWebAppStorage 'web-app-storage.bicep' = {
     logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
     virtualNetworkName: deployVirtualNetwork.outputs.virtualNetworkName
     privateEndpointsSubnetName: deployVirtualNetwork.outputs.privateEndpointsSubnetName
-    debugUserPrincipalId: yourPrincipalId
   }
   dependsOn: [
     deployAIAgentServiceDependencies // There is a Storage account in the AI Agent dependencies module, both will be updating the same private DNS zone, want to run them in series to avoid conflict errors.
@@ -219,7 +215,6 @@ module deployWebApp 'web-app.bicep' = {
     location: location
     baseName: baseName
     logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
-    publishFileName: publishFileName
     virtualNetworkName: deployVirtualNetwork.outputs.virtualNetworkName
     appServicesSubnetName: deployVirtualNetwork.outputs.appServicesSubnetName
     privateEndpointsSubnetName: deployVirtualNetwork.outputs.privateEndpointsSubnetName
@@ -245,6 +240,29 @@ module deployApplicationGateway 'application-gateway.bicep' = {
     keyVaultName: deployKeyVault.outputs.keyVaultName
     gatewayCertSecretKey: deployKeyVault.outputs.gatewayCertSecretKey
   }
+}
+
+// Existing reference to the Function App's user-assigned identity created in web-app.bicep
+resource functionAppUserAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = {
+  name: 'id-func-${baseName}'
+}
+
+// Call role-assign-aad.bicep to grant roles to users, AI Foundry project, and the Function App identity
+module roleAssignments 'role-assign-aad.bicep' = if (enableRoleAssignments) {
+  name: 'roleAssignmentsDeploy'
+  scope: resourceGroup()
+  params: {
+    baseName: baseName
+    debugUserPrincipalId: yourPrincipalId
+    aiFoundryPortalUserPrincipalId: yourPrincipalId
+    aiFoundryProjectPrincipalId: deployAzureAiFoundryProject.outputs.aiFoundryProjectPrincipalId
+    aiFoundryProjectId: deployAzureAiFoundryProject.outputs.aiFoundryProjectId
+    workspaceIdAsGuid: deployAzureAiFoundryProject.outputs.workspaceIdAsGuid
+    functionAppManagedIdentityPrincipalId: functionAppUserAssignedIdentity.properties.principalId
+  }
+  dependsOn: [
+    deployWebApp
+  ]
 }
 
 // Optional Deployment for Customer Usage Attribution

@@ -8,6 +8,16 @@
 - [Azure Monitor Private Link Scope (AMPLS) and Application Insights](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/private-link-security)
 - [Azure service tags](https://learn.microsoft.com/en-us/azure/virtual-network/service-tags-overview): Azure service tags overview for user-defined routes
 - [Use Azure Firewall to route a multi hub and spoke topology](https://learn.microsoft.com/en-us/azure/firewall/firewall-multi-hub-spoke#routing-on-the-spoke-subnets)
+- [Deploy Secure Azure AI Foundry via Bicep](https://github.com/Azure-Samples/azure-ai-studio-secure-bicep)
+- [Azure Functions Flex Consumption Bicep Samples ](https://raw.githubusercontent.com/nzthiago/flex-consumption-bicep-basic/refs/heads/main/basic-onefile-managedidentity/main.bicep)
+
+#### Custom changes
+
+1. Added `role-assign-aad.bicep` to consolidate role assignment logic. In certain Azure environments, even though the user has the **Owner** role (which normally includes sufficient permissions to assign roles), role assignment was blocked by an administrator or uncertain issue.
+2. Updated `web-app.bicep` and `web-app-storage.bicep` to deploy Python 3.12 code on an Azure Function App (Flex Consumption plan).
+3. Added a call to `role-assign-aad.bicep` in `main.bicep`, but commented it out due to deployment failures.
+4. Updated commands to run in PowerShell.
+5. Create an Azure resource group, open `main_bicep.ps1`, set your values, and execute the PowerShell script to perform the deployment.
 
 -----
 
@@ -97,7 +107,7 @@ Follow these instructions to deploy this example to your Azure subscription, try
   - The subscription must have the following quota and SKU availability in the region you choose.
 
     - Application Gateways: 1 WAF_v2 tier instance
-    - App Service Plans: P1v3 (AZ), 3 instances
+    - App Service Plans: S (AZ), 1 instances
     - Azure AI Search (S - Standard): 1
     - Azure Cosmos DB: 1 account
     - OpenAI model: GPT-4o model deployment with 50k tokens per minute (TPM) capacity
@@ -125,16 +135,18 @@ The following steps are required to deploy the infrastructure from the command l
 
 1. In your shell, clone this repo and navigate to the root directory of this repository.
 
-   ```bash
+   ```powershell
    git clone https://github.com/Azure-Samples/openai-end-to-end-baseline
-   cd openai-end-to-end-baseline
+   Set-Location openai-end-to-end-baseline
    ```
 
 1. Log in and select your target subscription.
 
-   ```bash
+   ```powershell
    az login
-   az account set --subscription xxxxx
+   az login --tenant <your_tenant_id>
+   az account set --subscription <your_subscription_id>
+   az account show
    ```
 
 1. Obtain the App gateway certificate
@@ -142,19 +154,37 @@ The following steps are required to deploy the infrastructure from the command l
    Azure Application Gateway includes support for secure TLS using Azure Key Vault and managed identities for Azure resources. This configuration enables end-to-end encryption of the network traffic going to the web application.
 
    - Set a variable for the domain used in the rest of this deployment.
-
-     ```bash
-     DOMAIN_NAME_APPSERV="contoso.com"
-     ```
-
+      The Default domain for Azure App Service (test & dev only): `cloudapp.azure.com`
    - Generate a client-facing, self-signed TLS certificate.
 
      > :warning: Do not use the certificate created by this script for production deployments. The use of self-signed certificates are provided for ease of illustration purposes only. For your chat application traffic, use your organization's requirements for procurement and lifetime management of TLS certificates, *even for development purposes*.
 
      Create the certificate that will be presented to web clients by Azure Application Gateway for your domain.
 
-     ```bash
-     openssl req -x509 -nodes -days 365 -newkey rsa:2048 -out appgw.crt -keyout appgw.key -subj "/CN=${DOMAIN_NAME_APPSERV}/O=Contoso" -addext "subjectAltName = DNS:${DOMAIN_NAME_APPSERV}" -addext "keyUsage = digitalSignature" -addext "extendedKeyUsage = serverAuth"
+     ```powershell
+     # Common Name (CN): Historically used by clients to verify the server identity.
+     # Still relevant for some legacy systems, but not relied upon by modern browsers.
+     $DOMAIN_NAME_APPSERV="*.cloudapp.azure.com"
+
+     # Subject Alternative Names (SAN): Modern browsers and systems rely on SANs for domain validation.
+     # You can include multiple domains here to make the certificate valid for all of them.
+     $SAN_DOMAINS="DNS:*.cloudapp.azure.com,DNS:*.azurewebsites.net,DNS:*.azure.com,DNS:myapp.local,DNS:localhost"
+
+     # Generate a self-signed certificate:
+     # - Uses RSA 2048-bit key
+     # - Valid for 3650 days
+     # - Includes CN and SANs
+     # - Specifies key usage for digital signature and server authentication
+     openssl req -x509 -nodes -days 3650 -newkey rsa:2048 `
+     -out appgw.crt -keyout appgw.key `
+     -subj "/CN=$DOMAIN_NAME_APPSERV/O=Contoso" `
+     -addext "subjectAltName = $SAN_DOMAINS" `
+     -addext "keyUsage = digitalSignature" `
+     -addext "extendedKeyUsage = serverAuth"
+
+     # Export the certificate and private key to a PFX file (PKCS#12 format)
+     # - Useful for importing into systems like Azure Application Gateway
+     # - No password is set for the PFX file (pass: means empty password)
      openssl pkcs12 -export -out appgw.pfx -in appgw.crt -inkey appgw.key -passout pass:
      ```
 
@@ -162,23 +192,23 @@ The following steps are required to deploy the infrastructure from the command l
 
      :bulb: No matter if you used a certificate from your organization or generated one from above, you'll need the certificate (as `.pfx`) to be Base64 encoded for storage in Key Vault.
 
-     ```bash
-     APP_GATEWAY_LISTENER_CERTIFICATE_APPSERV=$(cat appgw.pfx | base64 | tr -d '\n')
-     echo APP_GATEWAY_LISTENER_CERTIFICATE_APPSERV: $APP_GATEWAY_LISTENER_CERTIFICATE_APPSERV
+     ```powershell
+     $APP_GATEWAY_LISTENER_CERTIFICATE_APPSERV = [Convert]::ToBase64String([IO.File]::ReadAllBytes("appgw.pfx"))
+     Write-Host "APP_GATEWAY_LISTENER_CERTIFICATE_APPSERV: $APP_GATEWAY_LISTENER_CERTIFICATE_APPSERV"
      ```
 
-1. Set the deployment location to one that [supports availability zones](https://learn.microsoft.com/azure/reliability/availability-zones-service-support) and has available quota.
+1. Set the deployment location to one that supports availability zones and has available quota.
 
    This deployment has been tested in the following locations: `eastus`, `eastus2`, `francecentral`, and `switzerlandnorth`. You might be successful in other locations as well.
 
-   ```bash
-   LOCATION=eastus2
+   ```powershell
+   $LOCATION = "eastus2"
    ```
 
 1. Set the base name value that will be used as part of the Azure resource names for the resources deployed in this solution.
 
-   ```bash
-   BASE_NAME=<base resource name, between 6 and 8 lowercase characters, all DNS names will include this text, so it must be unique.>
+   ```powershell
+   $BASE_NAME = "<base resource name, between 6 and 8 lowercase characters, all DNS names will include this text, so it must be unique.>"
    ```
 
 1. Create a resource group and deploy the infrastructure.
@@ -189,17 +219,18 @@ The following steps are required to deploy the infrastructure from the command l
 
    :clock8: *This might take about 35 minutes.*
 
-   ```bash
-   RESOURCE_GROUP=rg-chat-baseline-${BASE_NAME}
+   ```powershell
+   $RESOURCE_GROUP = "rg-chat-baseline-$BASE_NAME"
    az group create -l $LOCATION -n $RESOURCE_GROUP
 
-   PRINCIPAL_ID=$(az ad signed-in-user show --query id -o tsv)
+   $PRINCIPAL_ID = (az ad signed-in-user show --query id -o tsv)
 
-   az deployment group create -f ./infra-as-code/bicep/main.bicep \
-     -g $RESOURCE_GROUP \
-     -p appGatewayListenerCertificate=${APP_GATEWAY_LISTENER_CERTIFICATE_APPSERV} \
-     -p baseName=${BASE_NAME} \
-     -p yourPrincipalId=${PRINCIPAL_ID}
+   az deployment group create -f ./infra-as-code/bicep/main.bicep `
+     -g $RESOURCE_GROUP `
+     -p appGatewayListenerCertificate=$APP_GATEWAY_LISTENER_CERTIFICATE_APPSERV `
+     -p baseName=$BASE_NAME `
+     -p yourPrincipalId=$PRINCIPAL_ID `
+     -p jumpBoxAdminPassword="<your_jumpbox_password>"
    ```
 
 ### 2. Deploy an agent in the Azure AI Foundry Agent Service
@@ -335,10 +366,9 @@ This section will help you to validate that the workload is exposed correctly an
 
 1. Get the public IP address of the Application Gateway.
 
-   ```bash
-   # Query the Azure Application Gateway Public IP
-   APPGW_PUBLIC_IP=$(az network public-ip show -g $RESOURCE_GROUP -n "pip-$BASE_NAME" --query [ipAddress] --output tsv)
-   echo APPGW_PUBLIC_IP: $APPGW_PUBLIC_IP
+   ```powershell
+   $APPGW_PUBLIC_IP = (az network public-ip show -g $RESOURCE_GROUP -n "pip-$BASE_NAME" --query "[ipAddress]" -o tsv)
+   Write-Host "APPGW_PUBLIC_IP: $APPGW_PUBLIC_IP"
    ```
 
 1. Create an `A` record for DNS.
@@ -357,47 +387,4 @@ This section will help you to validate that the workload is exposed correctly an
 
 Most Azure resources deployed in the prior steps will incur ongoing charges unless removed. This deployment is typically over $90 a day, and more if you enabled Azure DDoS Protection. Promptly delete resources when you are done using them.
 
-Additionally, a few of the resources deployed enter soft delete status which will restrict the ability to redeploy another resource with the same name or DNS entry; and might not release quota. It's best to purge any soft deleted resources once you are done exploring. Use the following commands to delete the deployed resources and resource group and to purge each of the resources with soft delete.
-
-1. Delete the resource group as a way to delete all contained Azure resources.
-
-   | :warning: | This will completely delete any data you may have included in this example. That data and this deployment will be unrecoverable. |
-   | :-------: | :------------------------- |
-
-   :clock8: *This might take about 20 minutes.*
-
-   ```bash
-   # This command will delete most of the resources, but will sometimes error out. That's expected.
-   az group delete -n $RESOURCE_GROUP -y
-
-   # Continue, even if the previous command errored.
-   ```
-
-1. Purge soft-deleted resources.
-
-   ```bash
-   # Purge the soft delete resources.
-   az keyvault purge -n kv-${BASE_NAME} -l $LOCATION
-   az cognitiveservices account purge -g $RESOURCE_GROUP -l $LOCATION -n aif${BASE_NAME}
-   ```
-
-1. [Remove the Azure Policy assignments](https://portal.azure.com/#blade/Microsoft_Azure_Policy/PolicyMenuBlade/Compliance) scoped to the resource group. To identify those created by this implementation, look for ones that are prefixed with `[BASE_NAME] `.
-
-> [!TIP]
-> The `vnet-workload` and associated networking resources are sometimes blocked from being deleted with the above instructions. This is because the Azure AI Foundry Agent Service subnet (`snet-agentsEgress`) retains a latent Microsoft-managed delegated connection (`serviceAssociationLink`) to the deleted Foundry Agent Service backend. The virtual network and associated resources typically become free to delete about an hour after purging the Azure AI Foundry account.
->
-> The lingering resources do not have a cost associated with them existing in your subscription.
->
-> If the resource group didn't fully delete, re-execute the `az group delete -n $RESOURCE_GROUP -y` command after an hour to complete the cleanup.
-
-## Production readiness changes
-
-The infrastructure as code included in this repository has a few configurations that are made only to enable a smoother and less expensive deployment experience when you are first trying this implementation out. These settings are not recommended for production deployments, and you should evaluate each of the settings before deploying to production. Those settings all have a comment next to them that starts with `Production readiness change:`.
-
-## Contributions
-
-Please see our [Contributor guide](./CONTRIBUTING.md).
-
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact <opencode@microsoft.com> with any additional questions or comments.
-
-With :heart: from Azure Patterns & Practices, [Azure Architecture Center](https://azure.com/architecture).
+Additionally, a few of the resources deployed enter soft delete status which will restrict the ability to redeploy another resource with the same name or DNS entry.

@@ -9,11 +9,6 @@ param location string = resourceGroup().location
 @maxLength(8)
 param baseName string
 
-@description('Assign your user some roles to support access to the Azure AI Foundry Agent dependencies for troubleshooting post deployment')
-@maxLength(36)
-@minLength(36)
-param debugUserPrincipalId string
-
 @description('The name of the workload\'s existing Log Analytics workspace.')
 @minLength(4)
 param logAnalyticsWorkspaceName string
@@ -32,7 +27,6 @@ module deployAgentStorageAccount 'ai-agent-blob-storage.bicep' = {
     location: location
     baseName: baseName
     logAnalyticsWorkspaceName: logAnalyticsWorkspaceName
-    debugUserPrincipalId: debugUserPrincipalId
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
   }
 }
@@ -45,7 +39,6 @@ module deployCosmosDbThreadStorageAccount 'cosmos-db.bicep' = {
     location: location
     baseName: baseName
     logAnalyticsWorkspaceName: logAnalyticsWorkspaceName
-    debugUserPrincipalId: debugUserPrincipalId
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
   }
 }
@@ -58,7 +51,6 @@ module deployAzureAISearchService 'ai-search.bicep' = {
     location: location
     baseName: baseName
     logAnalyticsWorkspaceName: logAnalyticsWorkspaceName
-    debugUserPrincipalId: debugUserPrincipalId
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
   }
 }

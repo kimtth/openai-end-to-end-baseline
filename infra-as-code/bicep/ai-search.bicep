@@ -17,11 +17,6 @@ param logAnalyticsWorkspaceName string
 @minLength(1)
 param privateEndpointSubnetResourceId string
 
-@description('Assign your user some roles to support access to the Azure AI Foundry Agent dependencies for troubleshooting post deployment')
-@maxLength(36)
-@minLength(36)
-param debugUserPrincipalId string
-
 // ---- Existing resources ----
 
 resource aiSearchLinkedPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' existing = {
@@ -30,11 +25,6 @@ resource aiSearchLinkedPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06
 
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02-01' existing = {
   name: logAnalyticsWorkspaceName
-}
-
-resource azureAISearchIndexDataContributorRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
-  name: '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
-  scope: subscription()
 }
 
 // ---- New resources ----
@@ -46,33 +36,20 @@ resource azureAiSearchService 'Microsoft.Search/searchServices@2025-02-01-previe
     type: 'SystemAssigned'
   }
   sku: {
-    name: 'standard'
+    name: 'basic' // dev: basic, prod: standard
   }
   properties: {
-    disableLocalAuth: true
+    disableLocalAuth: false // Enable local authentication for development
     authOptions: null
     hostingMode: 'default'
     partitionCount: 1 // Production readiness change: This can be updated based on the expected data volume and query load.
-    replicaCount: 3   // 3 replicas are required for 99.9% availability for read/write operations
+    replicaCount: 1   // dev: 1, prod: 3 replicas are required for 99.9% availability for read/write operations
     semanticSearch: 'disabled'
     publicNetworkAccess: 'disabled'
     networkRuleSet: {
       bypass: 'None'
       ipRules: []
     }
-  }
-}
-
-// Role assignments
-
-@description('Assign your user the Azure AI Search Index Data Contributor role to support troubleshooting post deployment. Not needed for normal operation.')
-resource debugUserAISearchIndexDataContributorAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(debugUserPrincipalId, azureAISearchIndexDataContributorRole.id, azureAiSearchService.id)
-  scope: azureAiSearchService
-  properties: {
-    roleDefinitionId: azureAISearchIndexDataContributorRole.id
-    principalId: debugUserPrincipalId
-    principalType: 'User'
   }
 }
 
