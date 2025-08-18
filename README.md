@@ -1,5 +1,4 @@
-<<<<<<< Updated upstream
-=======
+
 # Note for reference
 
 - [Azure API Management Landing Zone Accelerator](https://github.com/Azure/apim-landing-zone-accelerator): Azure API Management with Application Gateway - Secure Baseline
@@ -22,7 +21,6 @@
 
 -----
 
->>>>>>> Stashed changes
 # Azure AI Foundry Agent service chat baseline reference implementation
 
 This reference implementation illustrates an approach running a chat application and an AI orchestration layer in a single region. It uses Azure AI Foundry Agent service as the orchestrator and OpenAI foundation models. This repository directly supports the [Baseline end-to-end chat reference architecture](https://learn.microsoft.com/azure/architecture/ai-ml/architecture/baseline-openai-e2e-chat) on Microsoft Learn.
