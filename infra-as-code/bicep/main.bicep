@@ -36,7 +36,7 @@ param telemetryOptOut bool = false
 var varCuaid = 'a52aa8a8-44a8-46e9-b7a5-189ab3a64409'
 
 // Toggle to activate role assignment module
-var enableRoleAssignments = false
+param enableRoleAssignments bool = false
 
 // ---- New resources ----
 
@@ -214,7 +214,6 @@ module deployWebApp 'web-app.bicep' = {
   params: {
     location: location
     baseName: baseName
-    logAnalyticsWorkspaceName: logAnalyticsWorkspace.name
     virtualNetworkName: deployVirtualNetwork.outputs.virtualNetworkName
     appServicesSubnetName: deployVirtualNetwork.outputs.appServicesSubnetName
     privateEndpointsSubnetName: deployVirtualNetwork.outputs.privateEndpointsSubnetName
@@ -263,6 +262,7 @@ module roleAssignments 'role-assign-aad.bicep' = if (enableRoleAssignments) {
     aiFoundryProjectPrincipalId: deployAzureAiFoundryProject.outputs.aiFoundryProjectPrincipalId
     aiFoundryProjectId: deployAzureAiFoundryProject.outputs.aiFoundryProjectId
     workspaceIdAsGuid: deployAzureAiFoundryProject.outputs.workspaceIdAsGuid
+    cosmosDbAccountId: deployAIAgentServiceDependencies.outputs.cosmosDbAccountId
     functionAppManagedIdentityPrincipalId: functionAppUserAssignedIdentity.properties.principalId
     keyVaultName: deployKeyVault.outputs.keyVaultName
     appGatewayManagedIdentityPrincipalId: appGatewayUserAssignedIdentity.properties.principalId

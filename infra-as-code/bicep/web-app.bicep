@@ -14,10 +14,6 @@ param baseName string
 @minLength(1)
 param location string = resourceGroup().location
 
-@description('The name of the workload\'s existing Log Analytics workspace.')
-@minLength(4)
-param logAnalyticsWorkspaceName string
-
 @description('The name of the existing virtual network that this Web App instance will be deployed into for egress and a private endpoint for ingress.')
 @minLength(1)
 param virtualNetworkName string
@@ -70,10 +66,6 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing 
 @description('Existing Azure Storage account. This is where the web app code is deployed from.')
 resource webAppDeploymentStorageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
   name: existingWebAppDeploymentStorageAccountName
-}
-
-resource logWorkspace 'Microsoft.OperationalInsights/workspaces@2025-02-01' existing = {
-  name: logAnalyticsWorkspaceName
 }
 
 // If your web app/API code is going to be creating agents dynamically, you will need to assign a role such as this to App Service managed identity.
@@ -132,6 +124,9 @@ resource webApp 'Microsoft.Web/sites@2024-04-01' = {
   }
   properties: {
     serverFarmId: flexFuncPlan.id
+    // Ensure the virtualNetworkSubnetId property is not added to avoid InternalServerError.
+    // virtualNetworkSubnetId: virtualNetwork::appServicesSubnet.id
+    // https://stackoverflow.com/questions/79496095/azure-function-app-flexconsumption-deploy-from-bicep
     functionAppConfig: {
       deployment: {
         storage: {
