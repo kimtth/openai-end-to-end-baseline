@@ -1,5 +1,10 @@
 targetScope = 'resourceGroup'
 
+/* 
+Role assignments from failed deployments:
+Consolidate all role assignments into this file which failed during deployment. 
+*/
+
 // Parameters
 @minLength(6)
 @maxLength(8)
@@ -24,8 +29,8 @@ param aiFoundryProjectId string
 @description('The workspace ID as GUID for storage container conditions')
 param workspaceIdAsGuid string
 
-@description('Optional Cosmos SQL role assignment scope. Leave empty for account-wide. Examples: "/", "/dbs/myDb", "/dbs/myDb/colls/myColl"')
-param cosmosSqlRoleAssignmentScope string = ''
+@description('The Cosmos SQL role assignment scope. ')
+param cosmosDbAccountId string = ''
 
 @description('The principal ID (GUID) of the Function App user-assigned managed identity.')
 @minLength(36)
@@ -159,9 +164,8 @@ resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
   name: keyVaultName
 }
 
-// Role assignments from failed deployments:
-// Failed during deployment. Temporary solution: Commenting out role assignment for now.
 // ai-agent-blob-storage.bicep: Assign Storage Blob Data Owner at the storage account scope
+@description('Assign your user the Storage Blob Data Owner role at the storage account scope.')
 resource debugUserBlobDataOwnerAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(debugUserPrincipalId, storageBlobDataOwnerRole.id, agentStorageAccount.id)
   scope: agentStorageAccount
@@ -173,17 +177,19 @@ resource debugUserBlobDataOwnerAssignment 'Microsoft.Authorization/roleAssignmen
 }
 
 // web-app-storage.bicep: Assign Storage Blob Data Contributor at the container scope
+@description('Assign your user the ability to manage application deployment files in blob storage.')
 resource blobStorageContributorForUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(deployContainer.id, debugUserPrincipalId, storageBlobDataContributorRole.id)
   scope: deployContainer
   properties: {
     roleDefinitionId: storageBlobDataContributorRole.id
     principalType: 'User'
-    principalId: debugUserPrincipalId
+    principalId: debugUserPrincipalId // Part of the deployment guide requires you to upload the web app to this storage container. Assigning that data plane permission here. Ideally your CD pipeline would have this permission instead.
   }
 }
 
 // ai-search.bicep: Assign Azure AI Search Index Data Contributor at search service scope
+@description('Assign your user the Azure AI Search Index Data Contributor role to support troubleshooting post deployment. Not needed for normal operation.')
 resource debugUserAISearchIndexDataContributorAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(debugUserPrincipalId, azureAISearchIndexDataContributorRole.id, azureAiSearchService.id)
   scope: azureAiSearchService
@@ -195,6 +201,7 @@ resource debugUserAISearchIndexDataContributorAssignment 'Microsoft.Authorizatio
 }
 
 // ai-foundry.bicep: Assign Cognitive Services User for Foundry portal access
+@description('Assign yourself to have access to the Azure AI Foundry portal.')
 resource cognitiveServicesUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(aiFoundry.id, cognitiveServicesUserRole.id, aiFoundryPortalUserPrincipalId)
   scope: aiFoundry
@@ -216,13 +223,15 @@ resource assignDebugUserToCosmosAccountReader 'Microsoft.Authorization/roleAssig
   }
 }
 
-// Cosmos DB Account Data Contributor (no scope property sent)
-resource userToCosmosAccountScope 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-12-01-preview' = if (empty(cosmosSqlRoleAssignmentScope)) {
+// Assign Cosmos DB Account Data Contributor at account scope
+@description('Assign your own user to access the enterprise_memory database contents for troubleshooting purposes. Not required for normal usage.')
+resource userToCosmosAccountScope 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-12-01-preview' = {
   name: guid(debugUserPrincipalId, cosmosDataContributorRole.id, cosmosDbAccount.id)
   parent: cosmosDbAccount
   properties: {
     roleDefinitionId: cosmosDataContributorRole.id
     principalId: debugUserPrincipalId
+    scope: empty(cosmosDbAccountId) ? '/' : cosmosDbAccountId
   }
 }
 
@@ -280,6 +289,7 @@ resource projectAISearchIndexDataContributorAssignment 'Microsoft.Authorization/
 }
 
 // web-app.bicep: Role assignments for the Function App managed identity
+@description('Assign the Function App managed identity the Storage Blob Data Reader role at the storage account scope.')
 resource funcBlobDataReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(appDeployStorage.id, functionAppManagedIdentityPrincipalId, blobDataReaderRole.id)
   scope: appDeployStorage
@@ -290,6 +300,7 @@ resource funcBlobDataReaderRoleAssignment 'Microsoft.Authorization/roleAssignmen
   }
 }
 
+@description('Assign the Function App managed identity the Storage Queue Data Contributor role at the storage account scope.')
 resource funcBlobDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(appDeployStorage.id, functionAppManagedIdentityPrincipalId, storageBlobDataContributorRole.id)
   scope: appDeployStorage
@@ -300,6 +311,7 @@ resource funcBlobDataContributorRoleAssignment 'Microsoft.Authorization/roleAssi
   }
 }
 
+@description('Assign the Function App managed identity the Storage Queue Data Contributor role at the storage account scope.')
 resource funcQueueDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(appDeployStorage.id, functionAppManagedIdentityPrincipalId, storageQueueDataContributorRole.id)
   scope: appDeployStorage
@@ -310,6 +322,7 @@ resource funcQueueDataContributorRoleAssignment 'Microsoft.Authorization/roleAss
   }
 }
 
+@description('Assign the Function App managed identity the Storage Table Data Contributor role at the storage account scope.')
 resource funcTableDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(appDeployStorage.id, functionAppManagedIdentityPrincipalId, storageTableDataContributorRole.id)
   scope: appDeployStorage
@@ -321,6 +334,7 @@ resource funcTableDataContributorRoleAssignment 'Microsoft.Authorization/roleAss
 }
 
 // Scope: Azure AI Foundry account aif${baseName}
+@description('Assign the Function App managed identity the Azure AI User role at the Azure AI Foundry account scope.')
 resource funcAzureAiUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(aiFoundry.id, functionAppManagedIdentityPrincipalId, azureAiUserRole.id)
   scope: aiFoundry
@@ -332,6 +346,7 @@ resource funcAzureAiUserRoleAssignment 'Microsoft.Authorization/roleAssignments@
 }
 
 // Grant App Gateway MI access to Key Vault secrets (moved from application-gateway.bicep)
+@description('Assign the Application Gateway managed identity the Key Vault Secrets User role at the Key Vault scope.')
 resource appGatewayKeyVaultSecretsUserAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(keyVault.id, appGatewayManagedIdentityPrincipalId, keyVaultSecretsUserRole.id)
   scope: keyVault

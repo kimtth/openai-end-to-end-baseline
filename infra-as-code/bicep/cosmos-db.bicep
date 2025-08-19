@@ -173,3 +173,4 @@ resource cosmosDbPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01'
 // ---- Outputs ----
 
 output cosmosDbAccountName string = cosmosDbAccount.name
+output cosmosDbAccountId string = cosmosDbAccount.id
