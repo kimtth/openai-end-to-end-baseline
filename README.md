@@ -15,9 +15,10 @@
 
 1. Added `role-assign-aad.bicep` to consolidate role assignment logic. In certain Azure environments, even though the user has the **Owner** role (which normally includes sufficient permissions to assign roles), role assignment was blocked by an administrator or uncertain issue.
 2. Updated `web-app.bicep` and `web-app-storage.bicep` to deploy Python 3.12 code on an Azure Function App (Flex Consumption plan).
-3. Added a call to `role-assign-aad.bicep` in `main.bicep`, but commented it out due to deployment failures.
+3. Added a call to `role-assign-aad.bicep` in `main.bicep`. To activate role assignments, add the parameter `-p enableRoleAssignments=true` when running `main_bicep.ps1`.
 4. Updated commands to run in PowerShell.
 5. Create an Azure resource group, open `main_bicep.ps1`, set your values, and execute the PowerShell script to perform the deployment.
+6. Updated the .NET application to an Azure Function App running Python (`func-echo`). The sample application is designed to echo the value of the `name` property from the incoming request as the response. Deploy the application manually from the jump box.
 
 -----
 
