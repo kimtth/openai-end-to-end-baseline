@@ -44,6 +44,7 @@ param existingAzureAiFoundryProjectName string
 
 // variables
 var appName = 'func-${baseName}'
+var functionName = 'func-${baseName}-http-trigger'
 
 // ---- Existing resources ----
 
@@ -219,6 +220,40 @@ resource appServicePrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-0
 }
 
 // Note: Autoscale is built into Flex Consumption plan, no separate autoscale settings needed
+
+@description('Deploy Python code to Azure Function App')
+resource function 'Microsoft.Web/sites/functions@2024-11-01' = {
+  parent: webApp
+  name: functionName
+  properties: {
+    config: {
+      disabled: false
+      bindings: [
+        {
+          name: 'req'
+          type: 'httpTrigger'
+          direction: 'in'
+          authLevel: 'function'
+          methods: [
+            'get'
+          ]
+        }
+        {
+          name: '$return'
+          type: 'http'
+          direction: 'out'
+        }
+      ]
+    }
+    files: {
+      '.funcignore': loadTextContent('../../func-echo/.funcignore', 'utf-8')
+      '.gitignore': loadTextContent('../../func-echo/.gitignore', 'utf-8')
+      'function_app.py': loadTextContent('../../func-echo/function_app.py', 'utf-8')
+      'host.json': loadTextContent('../../func-echo/host.json', 'utf-8')
+      'requirements.txt': loadTextContent('../../func-echo/requirements.txt', 'utf-8')
+    }
+  }
+}
 
 // ---- Outputs ----
 
